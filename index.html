@@ -113,6 +113,11 @@ table.verdicts td.id a { text-decoration: none; }
 .item { scroll-margin-top: 12px; }
 .item .head h3 { flex: 1 1 320px; }
 .panel > p { max-width: 80ch; }
+table.compact { font-size: 13px; }
+table.compact th, table.compact td { padding-right: 12px; }
+table.compact td:nth-child(1) { width: 27%; }
+table.compact td:nth-child(2) { white-space: nowrap; }
+table.compact td:nth-child(3) { width: 21%; }
 </style>
 </head>
 <body>
@@ -120,13 +125,14 @@ table.verdicts td.id a { text-decoration: none; }
 
 <header>
   <div class="eyebrow">nanolize 行为一致性 · main @ 3381471 · 2026-11-19</div>
-  <h1>七个坑点都能复现，需要改代码的是其中四处小缺陷</h1>
+  <h1>七个坑点都能复现，要改代码的是其中五个，都是小改动</h1>
   <p class="lede">这一页回答一个问题：一份针对 nanolize 提交 <code>1ef5998d</code> 的行为一致性审计列了七个“设计坑点”，它们在最新 <code>main</code> 上是不是需要改代码的 bug。做法是逐条对照代码、设计文档、已有测试和提交历史，重跑并扩展材料的复现，在已完成作业的记录里统计触发次数，再把要改的部分在仓库副本上做成原型验证。</p>
   <div class="meta">
     <span><b>核对对象</b> nanolize（私有仓库）<code>main</code> @ 3381471。比被审计的 1ef5998d 多一个合并，只改了说明文档、技能文件和一个测试，<code>src/</code> 没有变化</span>
     <span><b>材料</b>《nanolize (1ef5998d) 行为一致性对齐现状与七大设计坑点审计》</span>
     <span><b>状态</b> 本页是分析和方案。nanolize 仓库没有改动，原型只在本地副本上</span>
     <span><b>上一轮</b> <a href="../nanolize-consistency-review/">main @ a6fc619 上的七项改进</a></span>
+    <span><b>更新</b> 坑点 3 原先待定的一件事已经定下，结论、坑点 3 和修改方案按决定改写</span>
   </div>
 </header>
 
@@ -134,10 +140,10 @@ table.verdicts td.id a { text-decoration: none; }
   <div class="kpis">
     <div class="kpi"><div class="label">机制在最新 main 上存在</div><div class="value">7 <small>/ 7</small></div>
       <div class="note">材料自带的脚本原样跑通，输出和材料页面一致</div></div>
-    <div class="kpi"><div class="label">有确定缺陷、要改代码</div><div class="value">4 <small>个坑点</small></div>
-      <div class="note">坑点 1、4、6、7，共 7 处小改动</div></div>
-    <div class="kpi"><div class="label">主体是设计、不用改</div><div class="value">3 <small>个坑点</small></div>
-      <div class="note">坑点 2、3、5。其中 2、3 各有一个“没显示出来”的缺口</div></div>
+    <div class="kpi"><div class="label">要改代码</div><div class="value">5 <small>个坑点</small></div>
+      <div class="note">坑点 1、4、6、7 是确定的缺陷，共 7 处小改动。坑点 3 补交付报告和交付状态，已定</div></div>
+    <div class="kpi"><div class="label">不用改</div><div class="value">2 <small>个坑点</small></div>
+      <div class="note">坑点 2、5 是设计。坑点 2 有一个可选的显示改进</div></div>
     <div class="kpi"><div class="label">坑点 1–4 在已有作业里触发</div><div class="value">0 <small>次</small></div>
       <div class="note">12 到 24 个已完成作业的记录。材料把这四条定为 P1</div></div>
   </div>
@@ -147,11 +153,26 @@ table.verdicts td.id a { text-decoration: none; }
   <h2>结论</h2>
   <ul class="plain">
     <li><b>材料描述的机制是准确的。</b>七条在最新 main 上都存在，行号也对得上。</li>
-    <li><b>机制存在，不等于是要修的 bug。</b>逐条核对后分成三类：四个坑点里有确定的小缺陷（坑点 1 的导入别名、坑点 4 的归一化、坑点 6 的十六进制打码、坑点 7 的聚合顺序）；两个坑点的主体是有文档、有测试的设计，各带一个状态没有显示出来的缺口（坑点 2、3）；一个是刚做完的设计取舍，不用动（坑点 5）。</li>
+    <li><b>机制存在，不等于是要修的 bug。</b>逐条核对后分成三类。四个坑点里有确定的小缺陷：坑点 1 的导入别名、坑点 4 的归一化、坑点 6 的十六进制打码、坑点 7 的聚合顺序。坑点 3 的封存顺序和门禁是设计，但审查结论和没解决的问题不进交付报告，这一处要改。坑点 2 是有文档、有测试的取舍，只有一个可选的显示改进；坑点 5 是刚做完的设计取舍，不用动。</li>
+    <li><b>坑点 3 里原先待定的一件事已经定下。</b>交付时还有 <code>blocked</code> 的未知问题，状态落到已有的 <code>completed_with_gaps</code>，不再是 <code>succeeded</code>。</li>
     <li><b>没有一条够得上 P1。</b>在能读到的已完成作业里，坑点 1 到 4 的触发条件一次都没有出现；坑点 7 的条件出现过一次，结果没有差别。它们值得改，是因为一旦触发就悄悄漏掉、不留痕迹，不是因为现在正在漏。</li>
     <li><b>材料提的修法有三个不建议采用。</b>外部装饰器一律判“不确定”（坑点 1）、共用文件一律判无效或按符号敲除（坑点 2）、审查结论直接卡交付并让审查者的脚本追加成检查（坑点 3）。前两个实测会造成损失，第三个违背“作者不接触测试”的隔离。</li>
     <li><b>要改的都做了原型。</b>在仓库副本上改完，跑了相关的测试模块，并用材料的脚本确认结果变了。全部原型合计不到 300 行。</li>
   </ul>
+</section>
+
+<section>
+  <h2>已定的一件事</h2>
+  <p>这件事原先列为“需要你定”，现在已经定下，并写进了坑点 3 和修改方案。</p>
+  <div class="panel"><div class="scroll"><table class="three">
+    <thead><tr><th>事项</th><th>决定</th><th>理由</th><th>写在哪里</th></tr></thead>
+    <tbody>
+      <tr><td><code>blocked</code> 的未知问题和交付状态</td>
+        <td>交付时还有状态是 <code>blocked</code> 的未知问题，交付状态落到已有的 <code>completed_with_gaps</code>。缺口名 <code>unresolved_unknowns</code>，不算失败，可关闭。<code>open</code> 不影响状态。不新增状态</td>
+        <td>原先控制器没有办法让交付状态反映“有一个问题我没能解决”。这一条只会把状态往下调，只在控制器自己标了 <code>blocked</code> 时生效。已有的 24 个作业没有一个记过未知问题，所以不改变任何已有结果</td>
+        <td><a href="#p3">坑点 3</a>、<a href="#plan">修改方案</a> G</td></tr>
+    </tbody>
+  </table></div></div>
 </section>
 
 <section>
@@ -165,7 +186,7 @@ table.verdicts td.id a { text-decoration: none; }
       <tr><td class="id"><a href="#p2">2</a></td><td>共用源文件的功能节点，敲除做不了，按有效处理<small>冻结期 · <code>leaf_test_validity.py</code></small></td><td>P1</td>
         <td><span class="pill good">不用改</span> 文档写明、测试固定的取舍<small>可选：把“有效但没有敲除证据”显示出来</small></td><td>低</td><td>可选 28 行</td></tr>
       <tr><td class="id"><a href="#p3">3</a></td><td>先封存再写代码；门禁不看审查结论和阻塞的未知问题<small>冻结到交付 · <code>job_tools/acceptance.py</code></small></td><td>P1</td>
-        <td><span class="pill good">不用改</span> 封存顺序和门禁<small><span class="pill warn">建议改</span> 审查结论和未解决的问题不进交付报告</small></td><td>低</td><td>约 64 行加文档</td></tr>
+        <td><span class="pill good">不用改</span> 封存顺序；审查结论不直接卡门禁<small><span class="pill warn">要改</span> 审查结论和没解决的问题进交付报告；<code>blocked</code> 的未知问题把状态降到 <code>completed_with_gaps</code>（已定）</small></td><td>低</td><td>约 64 行，加文档、提示词、运行页</td></tr>
       <tr><td class="id"><a href="#p4">4</a></td><td>scenario 观察器把五种差异抹平<small>对比期 · <code>scenario_runner.py</code></small></td><td>P1</td>
         <td><span class="pill warn">要改</span> 四处归一化，每处一两行<small>记录返回值类型可选</small></td><td>中低</td><td>约 20 行，可选另加 30 行</td></tr>
       <tr><td class="id"><a href="#p5">5</a></td><td>能读原版源码、不许照抄、照抄也不打回<small>编写期 · <code>original_overlap.py</code> 和提示词</small></td><td>P2</td>
@@ -253,7 +274,7 @@ table.verdicts td.id a { text-decoration: none; }
   <div class="n">3</div>
   <div class="body">
     <div class="head"><h3>契约先封存再写代码；交付门禁不看审查结论和“阻塞”的未知问题</h3>
-      <span class="pill good">封存和门禁不用改</span><span class="pill warn">建议改 · 让它们进报告</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 低</span></div>
+      <span class="pill good">封存和门禁不用改</span><span class="pill warn">要改 · 进报告，blocked 降状态（已定）</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 低</span></div>
     <dl>
       <dt>材料的说法</dt>
       <dd>候选把 <code>read({'x': 0}, 'x', 9)</code> 算成 9，冻结的检查恰好没测存入 0 的情况。审查者报告了这个问题，控制器也记了一条 <code>blocked</code> 的未知问题，<code>deliver(require="succeeded")</code> 仍然返回 <code>succeeded</code>、<code>gaps: []</code>。<code>acceptance.py</code> 的证据名单里没有审查报告和 <code>unknowns.json</code>。封存之后不能再加测试。建议：未解决的审查结论和阻塞的未知问题卡住交付；允许封存后把审查者的最小脚本验证后追加成检查。另提了一个附加风险：并行分步编写时内部约定会分裂。</dd>
@@ -270,15 +291,36 @@ table.verdicts td.id a { text-decoration: none; }
         </ul>
       </dd>
       <dt>判定</dt>
-      <dd>“先封存再写代码”“审查结论不直接卡门禁”是设计，不用改。“交付报告里看不到审查结论和未解决的问题”是真实的小缺陷，建议改。“<code>blocked</code> 的未知问题不影响状态”代码和文档一致；我仍然把它算作值得改的地方，因为现在控制器没有任何办法让交付状态反映“有一个问题我没能解决”，而这正是 <code>completed_with_gaps</code> 该表达的意思。</dd>
+      <dd>“先封存再写代码”“审查结论不直接卡门禁”是设计，不用改。“交付报告里看不到审查结论和未解决的问题”是真实的小缺陷，要改。“<code>blocked</code> 的未知问题不影响状态”代码和文档一致；我仍然把它算作要改的地方，因为原先控制器没有任何办法让交付状态反映“有一个问题我没能解决”，而这正是 <code>completed_with_gaps</code> 该表达的意思。这一条已经定下，按下面的方案做。</dd>
       <dt>改法</dt>
       <dd>
         <ol class="plain">
-          <li><b>让它们进报告。</b>交付结果列出审查产物（编号和结论条数）和未关闭的未知问题；运行页同样显示；文档补一句“审查结论不改变任何状态”。</li>
-          <li><b><code>blocked</code> 的未知问题记成一个只在交付时生效的缺口</b>（<code>unresolved_unknowns</code>，不算失败，可关闭），状态落到已有的 <code>completed_with_gaps</code>；<code>open</code> 不影响状态。这一条只会把状态往下调，并且只在控制器自己明确标了 <code>blocked</code> 时生效。它改变了 <code>blocked</code> 的文档含义，属于设计决定，需要你定。</li>
-          <li><b>审查结论不直接卡交付，通过第 2 条进门禁。</b>在控制器指引里加一句：没修、也没驳回的结论，记成一条 <code>blocked</code> 的未知问题并引用审查产物。只有结论已经变成一条失败的检查时才拦交付。</li>
+          <li><b>让它们进报告。</b>交付结果新增两项：<code>unknowns</code> 列出没有了结的未知问题（编号、状态、涉及的功能、问题和阻塞原因各一行、引用的产物）；<code>reviews</code> 列出每份审查产物（编号、当时的候选、结论条数、是不是针对交付的这份代码）。只列编号和数量，审查的原文仍然留在产物里。运行页同样显示。文档补一句“审查结论不改变任何状态”。</li>
+          <li><b><code>blocked</code> 的未知问题是一个交付缺口（已定）。</b>新缺口 <code>unresolved_unknowns</code>，不算失败，可关闭。交付时只要还有状态是 <code>blocked</code> 的未知问题，交付状态就是已有的 <code>completed_with_gaps</code>，不推送；不新增状态。<code>open</code> 是备注，不影响状态；<code>resolved</code> 和 <code>dropped</code> 表示已经了结。关闭的办法是控制器把这条问题更新成 <code>resolved</code> 或 <code>dropped</code>。<code>record_unknown</code> 这次调用本身仍然不是拒绝，批处理照常继续。</li>
+          <li><b>审查结论不直接卡交付，通过第 2 条进门禁。</b>控制器指引加一句：没修、也没驳回的结论，记成一条 <code>blocked</code> 的未知问题并引用审查产物。只有结论已经变成一条失败的检查时才直接拦交付。</li>
         </ol>
-        <p class="sub" style="margin-top:8px">第 1、2 条的核心部分做了原型（3 个文件 64 行，未含文档、提示词和运行页）：材料的例子从 <code>succeeded</code> 变成被 <code>require="succeeded"</code> 拦下、状态 <code>completed_with_gaps</code>；只有审查结论、或未知问题是 <code>open</code>/<code>resolved</code>/<code>dropped</code> 时不变。相关 23 个测试模块 490 个测试，改前改后都是 489 个通过，各有 1 个与改动无关的失败，单独重跑通过。不采用材料的“封存后由审查者脚本追加检查”：审查者是作者一侧的会话，让它写的东西成为验收证据，违背“作者不接触测试”的隔离。如果以后要做无人值守的追加，应该由测试设计者按结论的文字写一个只给输入的 scenario 文件，以原版的录制为答案，走现有的各道门，并由主人用策略开关打开；那是一个新功能，不是修 bug。</p>
+        <div class="scroll" style="margin-top:10px"><table class="compact">
+          <thead><tr><th>交付前的记录</th><th><code>require</code></th><th>现在</th><th>改后（原型实测）</th></tr></thead>
+          <tbody>
+            <tr><td>审查结论，加一条 <code>blocked</code> 的未知问题<small>材料的例子</small></td><td><code>succeeded</code></td><td><code>succeeded</code>，缺口为空</td><td>拦下；状态会是 <code>completed_with_gaps</code>，缺口 <code>unresolved_unknowns</code></td></tr>
+            <tr><td>同上</td><td><code>best_reachable</code></td><td><code>succeeded</code></td><td>拦下，因为缺口可关闭</td></tr>
+            <tr><td>同上</td><td><code>no_failures</code></td><td><code>succeeded</code></td><td>交付，<code>completed_with_gaps</code></td></tr>
+            <tr><td>同上</td><td>不指定</td><td><code>succeeded</code></td><td>交付，<code>completed_with_gaps</code></td></tr>
+            <tr><td>只有一条 <code>blocked</code> 的未知问题</td><td><code>succeeded</code></td><td><code>succeeded</code></td><td>拦下</td></tr>
+            <tr><td>只有审查结论</td><td><code>succeeded</code></td><td><code>succeeded</code></td><td><code>succeeded</code>，结果里列出审查产物</td></tr>
+            <tr><td>未知问题是 <code>open</code>、<code>resolved</code> 或 <code>dropped</code></td><td><code>succeeded</code></td><td><code>succeeded</code></td><td><code>succeeded</code>，<code>open</code> 的列在结果里</td></tr>
+          </tbody>
+        </table></div>
+        <p style="margin-top:10px"><b>完整的改动包括：</b></p>
+        <ul class="plain">
+          <li>代码：<code>job_tools/acceptance.py</code>（新缺口）、<code>deliver.py</code>（结果里的两项）、<code>manage.py</code>（哪些问题算没了结）。原型 3 个文件 64 行。</li>
+          <li>文档：<code>docs/job-tools.md</code> 的缺口表和可关闭清单；<code>record_unknown</code> 的说明改成“这次调用不是拒绝，但 <code>blocked</code> 的问题会让交付停在 <code>completed_with_gaps</code>”。</li>
+          <li>提示词：控制器指引里讲未知问题的两处，写清 <code>blocked</code> 和 <code>open</code> 的区别，加上第 3 条那一句；重新生成 <code>docs/prompts.md</code> 和提示词视图。</li>
+          <li>运行页：缺口名称的标签，未知问题和审查的行。</li>
+          <li>测试：原型带了 5 个新测试。没有已有测试固定“<code>blocked</code> 的未知问题加交付等于 <code>succeeded</code>”，所以不用改旧测试。</li>
+        </ul>
+        <p style="margin-top:10px"><b>两点要在指引里写清楚：</b>只有“这个问题我解决不了，并且它关系到所选功能的行为”才标 <code>blocked</code>，其余用 <code>open</code>；否则控制器可能把小疑问都标成 <code>blocked</code>，或者为了拿到 <code>succeeded</code> 干脆不记。无人值守的作业会因此多一种 <code>completed_with_gaps</code> 的来源，这在 <code>owner_attends: false</code> 下本来就是可以接受的结束状态。</p>
+        <p class="sub" style="margin-top:8px">原型的验证：相关 23 个测试模块 490 个测试，改前改后都是 489 个通过，各有 1 个与改动无关的失败，单独重跑通过。已有的 24 个作业里没有一个记过未知问题，所以这个改动不改变任何已有作业的结果。不采用材料的“封存后由审查者脚本追加检查”：审查者是作者一侧的会话，让它写的东西成为验收证据，违背“作者不接触测试”的隔离。如果以后要做无人值守的追加，应该由测试设计者按结论的文字写一个只给输入的 scenario 文件，以原版的录制为答案，走现有的各道门，并由主人用策略开关打开；那是一个新功能，不是修 bug。</p>
       </dd>
     </dl>
   </div>
@@ -399,9 +441,9 @@ table.verdicts td.id a { text-decoration: none; }
 </section>
 <section id="plan">
   <h2>修改方案</h2>
-  <p>按“确定的缺陷先做、互不依赖、每项带回归测试”排列。第一批四项都是把“不同判成相同”或“判断依赖顺序”的地方改对，不改变任何设计。材料脚本里的用例可以直接改写成各项的回归测试。</p>
+  <p>按“要改的先做、互不依赖、每项带回归测试”排列。第一批的 A 到 D 是把“不同判成相同”或“判断依赖顺序”的地方改对，不改变任何设计；G 是已经定下的调整。材料脚本里的用例可以直接改写成各项的回归测试。</p>
   <div class="panel">
-    <h3>第一批：确定的缺陷</h3>
+    <h3>第一批：要改的</h3>
     <div class="scroll"><table class="wide">
       <thead><tr><th>#</th><th>改什么</th><th>在哪里</th><th>原型结果</th></tr></thead>
       <tbody>
@@ -409,6 +451,7 @@ table.verdicts td.id a { text-decoration: none; }
         <tr><td class="id">B</td><td>测试筛选：把 <code>from pytest import mark [as X]</code> 绑定的名字当作 mark 的来源<small>坑点 1</small></td><td><code>recovered_tests.py</code><small>和 E 合计 +62 −22 行</small></td><td>150 个判断里判错 4 个变 0 个，没有已有测试需要改</td></tr>
         <tr><td class="id">C</td><td>回放：每条命令单独配对比较，任何一条原版通过的命令下不再通过就计回归<small>坑点 7</small></td><td><code>original_replay.py</code><small>约 20 行</small></td><td>两种清单顺序都报 1 个回归；<code>tests/test_original_replay.py</code> 全部通过</td></tr>
         <tr><td class="id">D</td><td>修复反馈：只在 repr 写地址的位置（<code>at 0x…</code>）打码<small>坑点 6</small></td><td><code>assertion_feedback.py</code><small>1 行</small></td><td>颜色值原样给出；<code>tests/test_assertion_feedback.py</code> 全部通过</td></tr>
+        <tr><td class="id">G</td><td>交付结果和运行页列出审查产物、没了结的未知问题；<code>blocked</code> 的未知问题记成交付缺口 <code>unresolved_unknowns</code>，状态落到 <code>completed_with_gaps</code>；控制器指引加一句<small>坑点 3，已定</small></td><td><code>job_tools/acceptance.py</code>、<code>deliver.py</code>、<code>manage.py</code>，加文档、提示词、运行页<small>核心 64 行</small></td><td>材料的例子由 <code>succeeded</code> 变成被 <code>require="succeeded"</code> 拦下；只有审查结论、或未知问题不是 <code>blocked</code> 时结果不变。相关 490 个测试改前改后一样</td></tr>
       </tbody>
     </table></div>
   </div>
@@ -419,7 +462,6 @@ table.verdicts td.id a { text-decoration: none; }
       <tbody>
         <tr><td class="id">E</td><td>测试筛选：<code>-m</code> 表达式里出现已知由插件添加的 mark（<code>hypothesis</code>、<code>asyncio</code>）时判“不确定”；文档补一句写明两条假设<small>坑点 1</small></td><td><code>recovered_tests.py</code>、<code>docs/graph-rewrite.md</code></td><td>丢失会以“未验证”报告出来，不再静默。表里只放验证过的名字</td></tr>
         <tr><td class="id">F</td><td>scenario：记录返回值的类型（<code>kind</code>）<small>坑点 4 的第五处</small></td><td><code>scenario_runner.py</code>、<code>scenarios.py</code><small>约 30 行</small></td><td>改记录格式，<code>tests/test_scenarios.py</code> 另有 2 个断言要更新；升级前导出的验证包需要重录</td></tr>
-        <tr><td class="id">G</td><td>交付结果和运行页列出审查产物、未关闭的未知问题；<code>blocked</code> 的未知问题记成只在交付时生效的缺口，状态落到 <code>completed_with_gaps</code>；控制器指引加一句<small>坑点 3</small></td><td><code>job_tools/acceptance.py</code>、<code>deliver.py</code>、<code>manage.py</code>，加文档、提示词、运行页<small>核心 64 行</small></td><td>“让它们进报告”可以直接做。“<code>blocked</code> 影响状态”改变了它的文档含义，需要你定</td></tr>
         <tr><td class="id">H</td><td>功能节点“有效但没有敲除证据”显示在公开视图、冻结结果和报告页<small>坑点 2</small></td><td><code>leaf_coverage.py</code>、<code>public_view.py</code>、<code>job_tools/freeze.py</code>，加报告页<small>核心 28 行</small></td><td>不改任何判定</td></tr>
       </tbody>
     </table></div>
