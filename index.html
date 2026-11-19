@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nanolize 七个坑点核对</title>
+<meta name="description" content="对照 nanolize 最新 main 分支，逐条核对一份行为一致性审计列出的七个设计坑点：哪些是需要改代码的缺陷，哪些是设计取舍，并给出按顺序排列的修改方案。">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column. Four figures and the verdict first, the table of the seven judgments, each pitfall in turn (claim, facts, judgment, change), then the plan in order, what stays as it is, the other parts of the material, method. */
+:root {
+  --bg: #f4f6f9; --card: #fcfcfb; --ink: #14171c; --ink-2: #474e5c; --ink-3: #6b7281;
+  --line: #dde1e8; --accent: #2a78d6; --accent-soft: #dfeafa;
+  --good-ink: #0b6b0b; --warn-ink: #7a5200; --crit-ink: #a52727;
+  --good-bg: #e4f5e4; --warn-bg: #fdf1d3; --crit-bg: #fbe3e3; --warn: #fab219;
+  --font-body: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-head: "Space Grotesk", Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111315; --card: #1a1a19; --ink: #eceef1; --ink-2: #c0c5ce; --ink-3: #959cab;
+    --line: #2f333a; --accent: #5a9cec; --accent-soft: #162c47;
+    --good-ink: #7fd67f; --warn-ink: #f3c458; --crit-ink: #f08d8d;
+    --good-bg: #12301a; --warn-bg: #3a2d0c; --crit-bg: #3b1a1a; --warn: #c98500;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111315; --card: #1a1a19; --ink: #eceef1; --ink-2: #c0c5ce; --ink-3: #959cab;
+  --line: #2f333a; --accent: #5a9cec; --accent-soft: #162c47;
+  --good-ink: #7fd67f; --warn-ink: #f3c458; --crit-ink: #f08d8d;
+  --good-bg: #12301a; --warn-bg: #3a2d0c; --crit-bg: #3b1a1a; --warn: #c98500;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.page { max-width: 1000px; margin: 0 auto; padding-block: 36px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 44px; }
+header { display: flex; flex-direction: column; gap: 12px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; color: var(--ink-3); }
+h1 { font-family: var(--font-head); font-weight: 600; font-size: clamp(25px, 4.2vw, 36px); line-height: 1.28; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-head); font-weight: 600; font-size: 22px; line-height: 1.3; margin: 0; text-wrap: balance; }
+h3 { font-size: 16px; font-weight: 600; margin: 0; line-height: 1.45; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--accent); }
+.lede { font-size: 16.5px; color: var(--ink-2); max-width: 72ch; }
+code, .mono { font-family: var(--font-mono); font-size: .86em; }
+code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--ink-2); }
+.meta b { font-weight: 500; color: var(--ink-3); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 12px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi .label { font-size: 12.5px; color: var(--ink-3); }
+.kpi .value { font-family: var(--font-head); font-weight: 600; font-size: 30px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpi .value small { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+.kpi .note { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.good { background: var(--good-bg); color: var(--good-ink); }
+.pill.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.pill.crit { background: var(--crit-bg); color: var(--crit-ink); }
+.pill.plain { background: var(--accent-soft); color: var(--ink); }
+.tag { display: inline-block; font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; white-space: nowrap; line-height: 1.6; }
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 500; color: var(--ink-3); font-size: 12.5px; white-space: nowrap; vertical-align: bottom; }
+tr:last-child td { border-bottom: 0; }
+td.id { font-family: var(--font-head); font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td small { color: var(--ink-3); font-size: 12px; display: block; margin-top: 3px; line-height: 1.5; }
+table.wide td:nth-child(2) { min-width: 230px; }
+table.wide td:nth-child(3) { min-width: 260px; }
+table.three td { min-width: 200px; }
+table.three td:first-child { min-width: 130px; }
+table.nowrap1 td:first-child { white-space: nowrap; }
+.sub { font-size: 13px; color: var(--ink-3); max-width: 80ch; }
+
+ul.plain { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 8px; max-width: 76ch; }
+ol.plain { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 8px; max-width: 76ch; }
+
+.item { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+.item:first-child { padding-top: 2px; } .item:last-child { border-bottom: 0; padding-bottom: 2px; }
+.item .n { font-family: var(--font-head); font-weight: 600; font-size: 24px; line-height: 1.2; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.item .body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.item .head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.item dl { margin: 0; display: grid; grid-template-columns: 6.4em 1fr; gap: 10px 12px; font-size: 14px; }
+.item dt { color: var(--ink-3); font-size: 13px; padding-top: 1px; }
+.item dd { margin: 0; max-width: 74ch; min-width: 0; }
+.item dd > ul, .item dd > ol { margin-top: 8px; }
+.item dd > ul:first-child, .item dd > ol:first-child { margin-top: 0; }
+@media (max-width: 560px) { .item { grid-template-columns: 1fr; } .item dl { grid-template-columns: 1fr; gap: 2px 0; } .item dt { margin-top: 8px; } }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.step b { font-family: var(--font-head); font-size: 15px; }
+.step .when { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); letter-spacing: .03em; }
+
+footer { font-size: 12.5px; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+footer p { max-width: 86ch; }
+
+table.verdicts td:nth-child(2) { min-width: 250px; }
+table.verdicts td:nth-child(4) { min-width: 260px; }
+table.verdicts td:nth-child(3), table.verdicts td:nth-child(5), table.verdicts td:nth-child(6) { white-space: nowrap; }
+table.verdicts td.id a { text-decoration: none; }
+.item { scroll-margin-top: 12px; }
+.item .head h3 { flex: 1 1 320px; }
+.panel > p { max-width: 80ch; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="eyebrow">nanolize 行为一致性 · main @ 3381471 · 2026-11-19</div>
+  <h1>七个坑点都能复现，需要改代码的是其中四处小缺陷</h1>
+  <p class="lede">这一页回答一个问题：一份针对 nanolize 提交 <code>1ef5998d</code> 的行为一致性审计列了七个“设计坑点”，它们在最新 <code>main</code> 上是不是需要改代码的 bug。做法是逐条对照代码、设计文档、已有测试和提交历史，重跑并扩展材料的复现，在已完成作业的记录里统计触发次数，再把要改的部分在仓库副本上做成原型验证。</p>
+  <div class="meta">
+    <span><b>核对对象</b> nanolize（私有仓库）<code>main</code> @ 3381471。比被审计的 1ef5998d 多一个合并，只改了说明文档、技能文件和一个测试，<code>src/</code> 没有变化</span>
+    <span><b>材料</b>《nanolize (1ef5998d) 行为一致性对齐现状与七大设计坑点审计》</span>
+    <span><b>状态</b> 本页是分析和方案。nanolize 仓库没有改动，原型只在本地副本上</span>
+    <span><b>上一轮</b> <a href="../nanolize-consistency-review/">main @ a6fc619 上的七项改进</a></span>
+  </div>
+</header>
+
+<section>
+  <div class="kpis">
+    <div class="kpi"><div class="label">机制在最新 main 上存在</div><div class="value">7 <small>/ 7</small></div>
+      <div class="note">材料自带的脚本原样跑通，输出和材料页面一致</div></div>
+    <div class="kpi"><div class="label">有确定缺陷、要改代码</div><div class="value">4 <small>个坑点</small></div>
+      <div class="note">坑点 1、4、6、7，共 7 处小改动</div></div>
+    <div class="kpi"><div class="label">主体是设计、不用改</div><div class="value">3 <small>个坑点</small></div>
+      <div class="note">坑点 2、3、5。其中 2、3 各有一个“没显示出来”的缺口</div></div>
+    <div class="kpi"><div class="label">坑点 1–4 在已有作业里触发</div><div class="value">0 <small>次</small></div>
+      <div class="note">12 到 24 个已完成作业的记录。材料把这四条定为 P1</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>结论</h2>
+  <ul class="plain">
+    <li><b>材料描述的机制是准确的。</b>七条在最新 main 上都存在，行号也对得上。</li>
+    <li><b>机制存在，不等于是要修的 bug。</b>逐条核对后分成三类：四个坑点里有确定的小缺陷（坑点 1 的导入别名、坑点 4 的归一化、坑点 6 的十六进制打码、坑点 7 的聚合顺序）；两个坑点的主体是有文档、有测试的设计，各带一个状态没有显示出来的缺口（坑点 2、3）；一个是刚做完的设计取舍，不用动（坑点 5）。</li>
+    <li><b>没有一条够得上 P1。</b>在能读到的已完成作业里，坑点 1 到 4 的触发条件一次都没有出现；坑点 7 的条件出现过一次，结果没有差别。它们值得改，是因为一旦触发就悄悄漏掉、不留痕迹，不是因为现在正在漏。</li>
+    <li><b>材料提的修法有三个不建议采用。</b>外部装饰器一律判“不确定”（坑点 1）、共用文件一律判无效或按符号敲除（坑点 2）、审查结论直接卡交付并让审查者的脚本追加成检查（坑点 3）。前两个实测会造成损失，第三个违背“作者不接触测试”的隔离。</li>
+    <li><b>要改的都做了原型。</b>在仓库副本上改完，跑了相关的测试模块，并用材料的脚本确认结果变了。全部原型合计不到 300 行。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>七条的判定</h2>
+  <div class="panel"><div class="scroll">
+  <table class="verdicts">
+    <thead><tr><th>#</th><th>坑点</th><th>材料定级</th><th>判定</th><th>本页定级</th><th>改动</th></tr></thead>
+    <tbody>
+      <tr><td class="id"><a href="#p1">1</a></td><td>静态筛测试，认不出的 mark 写法判成“没选中”<small>转换期 · <code>recovered_tests.py</code></small></td><td>P1</td>
+        <td><span class="pill warn">要改</span> 导入别名是疏漏，两个方向都判错<small>“外部装饰器不加 mark”是有测试的设计，不改</small></td><td>中低</td><td>约 60 行</td></tr>
+      <tr><td class="id"><a href="#p2">2</a></td><td>共用源文件的功能节点，敲除做不了，按有效处理<small>冻结期 · <code>leaf_test_validity.py</code></small></td><td>P1</td>
+        <td><span class="pill good">不用改</span> 文档写明、测试固定的取舍<small>可选：把“有效但没有敲除证据”显示出来</small></td><td>低</td><td>可选 28 行</td></tr>
+      <tr><td class="id"><a href="#p3">3</a></td><td>先封存再写代码；门禁不看审查结论和阻塞的未知问题<small>冻结到交付 · <code>job_tools/acceptance.py</code></small></td><td>P1</td>
+        <td><span class="pill good">不用改</span> 封存顺序和门禁<small><span class="pill warn">建议改</span> 审查结论和未解决的问题不进交付报告</small></td><td>低</td><td>约 64 行加文档</td></tr>
+      <tr><td class="id"><a href="#p4">4</a></td><td>scenario 观察器把五种差异抹平<small>对比期 · <code>scenario_runner.py</code></small></td><td>P1</td>
+        <td><span class="pill warn">要改</span> 四处归一化，每处一两行<small>记录返回值类型可选</small></td><td>中低</td><td>约 20 行，可选另加 30 行</td></tr>
+      <tr><td class="id"><a href="#p5">5</a></td><td>能读原版源码、不许照抄、照抄也不打回<small>编写期 · <code>original_overlap.py</code> 和提示词</small></td><td>P2</td>
+        <td><span class="pill good">不用改</span> 刚合入的设计取舍，材料没有因果证据</td><td>不算缺陷</td><td>无</td></tr>
+      <tr><td class="id"><a href="#p6">6</a></td><td>修复反馈：第二次运行的数值；十六进制数被打码<small>修复期 · <code>probe_diagnosis.py</code>、<code>assertion_feedback.py</code></small></td><td>P2</td>
+        <td><span class="pill warn">要改</span> 打码规则<small>第二次运行是文档写明的设计，不改</small></td><td>低</td><td>1 行</td></tr>
+      <tr><td class="id"><a href="#p7">7</a></td><td>交付后回放只记第一条命令的结果<small>交付期 · <code>original_replay.py</code></small></td><td>P2</td>
+        <td><span class="pill warn">要改</span> 聚合方式<small>“回放不影响交付”是设计，不改</small></td><td>低</td><td>约 20 行</td></tr>
+    </tbody>
+  </table>
+  </div></div>
+</section>
+
+<section id="items">
+  <h2>逐条核对</h2>
+  <p>每条四栏：材料怎么说，核对到什么，怎么判，怎么改。行号是最新 main 上的位置，路径省略了 <code>src/nanolize/</code>。</p>
+  <div class="panel">
+<div class="item" id="p1">
+  <div class="n">1</div>
+  <div class="body">
+    <div class="head"><h3>静态筛测试时，认不出的 mark 写法被判成“原命令没选中”</h3>
+      <span class="pill warn">一半要改 · 约 60 行</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 中低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd><code>recovered_tests.py</code> 只认字面的 <code>pytest.mark.X</code>。<code>from pytest import mark as tag</code> 之后的 <code>@tag.billing</code>，在 <code>pytest -m billing</code> 下被记成 <code>deselected</code>，而 pytest 实际会选中它；Hypothesis 的 <code>@given</code> 在 <code>-m hypothesis</code> 下同样被丢掉。<code>deselected</code> 不产生未验证缺口，所以是静默丢测试。建议：跟踪别名；外部库或未知装饰器一律判“不确定”；冻结时跑一次 <code>pytest --collect-only</code> 交叉核对。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li><b>别名这一条成立，而且两个方向都错。</b>拿 13 种测试文件写法、6 个表达式和真实的 <code>pytest --collect-only</code> 逐个对比：150 个判断里有 4 个判错，全部出在这个别名和 Hypothesis 上。<code>-m billing</code> 时本该选中的测试被丢掉；<code>-m "not billing"</code> 时本该排除的测试被写进恢复文件、记成已保留，实际一次都没跑，也没有任何环节比对。材料只说了前一个方向。</li>
+          <li>别名是疏漏，不是设计。文档的规则是“读不出来的选择（不是按 mark 写法写的 mark……）让整条检查保持原样”，<code>import pytest as pt</code>、<code>from pytest import mark</code>、类上的装饰器、<code>pytestmark</code>、<code>pytest.param(marks=…)</code> 都按这条规则处理对了，只有函数装饰器上的导入别名漏了。</li>
+          <li><b>“外部装饰器不加 mark”是有意的假设，并且有测试固定。</b><code>tests/test_regressions2_prejob.py</code> 第 351–354 行：“另一个库的装饰器不设 mark”，断言 <code>@mock.patch</code> 在 <code>-m "not slow"</code> 下是确定选中。这也符合 pytest 的规则：<code>-m</code> 只看 mark。</li>
+          <li>Hypothesis 的例子是真的，但机制不是材料说的那样。<code>@given</code> 本身不加 mark（函数上没有 <code>pytestmark</code>）；mark 是装好的 Hypothesis 插件在收集钩子里加的，关掉插件就选不中。pytest-asyncio 的自动模式连装饰器都没有，照样给 <code>async def</code> 测试加 <code>asyncio</code> mark。所以“未知装饰器判不确定”堵不住这类情况。材料的脚本里这个用例没有真的跑 pytest（导入的是不存在的包，并且关掉了插件自动加载）。</li>
+          <li>材料的建议 2（外部装饰器一律判不确定）代价不小。“不确定”会让整条检查不拆分、里面的测试全部变成未验证。在 detectron2 的测试上假设一个 <code>-m</code> 过滤：多出 21 个测试变成不确定，含不确定测试的文件从 6 个涨到 17 个（共 63 个），而这 21 个全是 <code>@unittest.skipIf</code>，没有一个真有风险。它还会让上面那条已有测试失败。</li>
+          <li><b>影响面：在已有运行里是 0。</b>这段逻辑只作用于“被留在验收之外、并且命令里带 <code>-k</code>/<code>-m</code>”的检查。47 份清单和计划里 1385 条 pytest 检查没有一条带表达式，243 条被留出的检查也没有。<code>from pytest import mark as X</code> 在 tqdm、detectron2 的测试和约 2400 个导入 pytest 的第三方文件里出现 0 次。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>别名：真实缺陷，要改。它让一个号称“确定”的静态判断给出错误答案，并且不留痕迹；修起来便宜，只会让更多检查读得准。插件加的 mark：真实但面窄，建议一起处理。“外部装饰器一律不确定”：不采用。<code>deselected</code> 不算缺口：读对了的时候这是正确的，不用改。</dd>
+      <dt>改法</dt>
+      <dd>
+        <ol class="plain">
+          <li><b>跟踪别名。</b><code>_Scope</code> 记下由 <code>from pytest import mark [as X]</code> 绑定的名字，<code>_mark</code>、<code>_marks</code>、<code>_mentions_mark</code> 都认它；从 <code>pytest</code> 导入的其他名字归入“读不出来”。</li>
+          <li><b>在表达式一侧处理插件 mark。</b>一张小表（目前验证过 <code>hypothesis</code> 和 <code>asyncio</code> 两个）：<code>-m</code> 表达式里出现表中的名字时，带非 mark 装饰器的测试（<code>asyncio</code> 则是 <code>async def</code> 测试）判“不确定”。这样丢失会被报告出来，不再静默。</li>
+          <li><b>文档补一句</b>，写明这两条假设（<code>docs/graph-rewrite.md</code> 讲 <code>deselected</code> 的那一段）。</li>
+        </ol>
+        <p class="sub" style="margin-top:8px">前两步在副本上做了原型（+62 −22 行，另加一个新测试）：150 个判断里判错从 4 个降到 0 个，“不确定”从 42 个降到 20 个。相关 6 个测试模块里没有一个已有测试需要改；224 个测试通过 223 个，剩下 1 个是整作业测试在共享机器上等待超时，单独运行在改前改后都通过。暂不建议做材料的建议 3（冻结时再跑一次收集）：它是唯一能在交付前普遍发现“误丢”的办法，但现在没有一条被留出的检查带表达式，不值得为此加一个阶段。更便宜的补强是在基线阶段比对“恢复文件里该跑的测试”和“实际报告的用例”，能发现任何原因造成的“写了但没跑”。</p>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p2">
+  <div class="n">2</div>
+  <div class="body">
+    <div class="head"><h3>多个功能共用一个源文件时，敲除检验做不了，按“有效”处理</h3>
+      <span class="pill good">判定逻辑不用改</span><span class="pill plain">可选 · 把这个状态显示出来</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd><code>exclusive_sources()</code> 只返回一个功能节点独占的 <code>.py</code> 文件。两个节点共用文件时敲除结果是 <code>not_assessable / no_exclusive_python_source</code>，<code>discriminates()</code> 把它算成 <code>True</code>，节点进入 <code>valid</code>，不再补测试。材料称“哪怕现有测试只测了 1%，系统也认证测试有效”，建议改成按符号敲除，分不开就标记为需要补测。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li>机制和材料写的一致（<code>leaf_test_validity.py</code> 第 392–403、583–593、814–816 行）。在一个真实的捕获流程里复现：两个节点映射同一个文件，都进入 <code>valid</code>，<code>missing</code> 为空，留下一条警告。</li>
+          <li>这是文档写明、测试固定的设计。<code>docs/graph-rewrite.md</code> “A leaf with nothing to knock out” 一段：文件和别的节点共用、或不是 Python 的节点“无法这样评估，检查在没有这项证据的情况下算数”。三处测试固定了这个行为，提交历史里有专门的一条（<code>8928cd4</code>，“Keep a leaf nothing can knock out marked, not a gap, when it cannot hold the guard”）。</li>
+          <li><b>敲除量的不是覆盖率。</b>它把节点自己的函数全部改成抛异常，看检查会不会因行为而失败，回答的是“这条检查到底依不依赖这个节点”。一个节点有自己独占的文件、测试只调用 20 个函数里的 1 个，照样是 <code>killed</code>、照样 <code>valid</code>，没有任何警告。所以“只测 1% 也算有效”不是共用文件特有的问题，敲除从来不保证这一点。</li>
+          <li>敲除不是唯一的门。节点要进 <code>valid</code>，还得有映射到它的检查，并且这条检查在原版上通过、重复运行结果一致、有用例报告、不碰私有名字。没有任何检查的节点是 <code>no_check</code>，会进入补测。映射到它的检查在每个候选上都照常运行。</li>
+          <li><b>影响面：在能读到的 12 个真实作业里是 0。</b><code>no_exclusive_python_source</code> 一次都没有出现。tqdm 的 10 个作业里 <code>tqdm/std.py</code> 始终只属于一个节点，被正常敲除；每次无法评估的 2–4 个节点全是另一种原因（<code>no_function_bodies</code>，只有转发导入的小文件，占源码 1.8%）。detectron2 的两个作业没有无法评估的节点。材料引用的那份产物用的是另一种功能划分（把 <code>progress</code> 和 <code>formatting</code> 都映射到 <code>std.py</code>）。是否触发取决于功能图怎么划。</li>
+          <li>材料的两个修法都不成立。把 <code>no_exclusive_python_source</code> 改成不算数：实测两个节点都进 <code>missing</code>，原因码是误导性的 <code>no_behavioral_knockout_failure</code>；补一条强测试也出不来；新设计的测试在试跑时被同一个原因拒绝；<code>strict</code> 模式下作业会卡在冻结。按符号敲除：计划里没有函数级的归属数据；在真实的 <code>tqdm/std.py</code> 上只敲掉 9 个排版函数，材料例子里那条“只测计数”的测试也会失败（构造函数会画进度条），于是它会被记成排版功能的有效测试，正好和材料想要的结果相反。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>不是 bug，是有文档、有测试的取舍；材料提的两个修法都不建议采用。里面有一个真实的小缺口：这个状态只写在 <code>baseline-result.json</code> 的警告里，公开视图、报告页和给控制器的结果都把它丢掉了，页面上这类节点和正常验证过的节点看不出区别。</dd>
+      <dt>可以做的</dt>
+      <dd>
+        <ol class="plain">
+          <li><b>把状态显示出来（建议）。</b><code>leaf_coverage()</code> 增加 <code>valid_without_knockout</code>，<code>public_view</code> 透传，冻结结果和报告页显示“N 个节点有效但没有敲除证据”。不改任何判定。副本上 5 个文件 28 行；相关 21 个测试模块 517 个测试，改前改后都是 516 个通过，同一个与改动无关的失败。</li>
+          <li><b>只给这类节点默认派一个 scenario 设计会话（可选）。</b>条件是原因为共用文件、并且节点至少有一个 <code>.py</code> 文件。在调查过的 12 个作业里它不会多出任何会话；在材料那种划分下是两个会话加一次评审。</li>
+        </ol>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p3">
+  <div class="n">3</div>
+  <div class="body">
+    <div class="head"><h3>契约先封存再写代码；交付门禁不看审查结论和“阻塞”的未知问题</h3>
+      <span class="pill good">封存和门禁不用改</span><span class="pill warn">建议改 · 让它们进报告</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd>候选把 <code>read({'x': 0}, 'x', 9)</code> 算成 9，冻结的检查恰好没测存入 0 的情况。审查者报告了这个问题，控制器也记了一条 <code>blocked</code> 的未知问题，<code>deliver(require="succeeded")</code> 仍然返回 <code>succeeded</code>、<code>gaps: []</code>。<code>acceptance.py</code> 的证据名单里没有审查报告和 <code>unknowns.json</code>。封存之后不能再加测试。建议：未解决的审查结论和阻塞的未知问题卡住交付；允许封存后把审查者的最小脚本验证后追加成检查。另提了一个附加风险：并行分步编写时内部约定会分裂。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li>复现成立。证据名单确实只有 <code>verification</code>、<code>checks</code>、<code>installation</code>、<code>task_effort</code>、<code>performance</code>（<code>acceptance.py</code> 第 110 行）。小出入：第 763–890 行是缺口评估，交付状态在第 948–981 行决定。</li>
+          <li><b>交付出去的 bug 来自缺的那条检查，不来自门禁。</b>同样的坏候选、同样弱化的检查，不调用审查者、不记任何未知问题，也是 <code>succeeded</code>。另外，材料用的那个测试夹具自带的上游测试本来就测了存入 0，能抓到这个 bug（交付被拦下，状态是 <code>delivered_with_failures</code>）；材料是把它换成弱化版之后才复现的。</li>
+          <li><b>审查结论是没验证过的模型文字。</b>它没有编号，没有“已解决/已驳回”的状态，没有任何工具把它在原版和候选上跑一遍。文档写的是“这份产物是主人的，没有作业工具读它”。真实数据：24 个作业、123 次作者调用里只有 1 次审查调用，在 detectron2 作业里，7 条结论，审查者自己写“全部是低严重度”。控制器让作者修了 1 条，判定另外 6 条不是缺陷（作者在外部契约内的设计、未选中的功能）。如果“有结论就卡交付”，这个作业会被 6 条非缺陷卡住，而且结论没有状态可关，只能再花一次调用重新审。</li>
+          <li><code>blocked</code> 按文档不是拒绝。<code>record_unknown</code> 的说明：问题的状态是结果的一个字段，“<code>blocked</code> 不是拒绝”，批处理照常继续。24 个作业里 <code>record_unknown</code> 调用了 0 次。</li>
+          <li><b>先封存再写代码是有意的。</b>测试由单独的测试设计者写，作者永远看不到；看着草稿再设计测试，“会让作者的结果影响到测试或基线”。封存后加检查的路是有的，走主人授权：控制器 <code>request_revision</code>，主人 <code>job-authorize</code>。在材料的例子上把这条路从头到尾跑了一遍：无人值守时请求被记录、作业照常交付 <code>succeeded</code>；主人事后授权，作业被重新打开，重新捕获基线，同一个候选在新检查下 <code>regressed</code>，交付被拦下，修复后才 <code>succeeded</code>。</li>
+          <li><b>真实的缺口在可见性。</b>审查报告和未知问题都不进交付结果和报告页：审查只能用 <code>job-state --artifact review-N</code> 查，未知问题只在 <code>job-state</code> 里。同类的 <code>flag_check</code> 是进报告的，文档也明说它“不改变任何结论”，对审查和未知问题却没有这句话。主人拿到一份 <code>succeeded</code>、缺口为空的报告，看不出控制器曾经记过一个没解决的问题。</li>
+          <li>附加风险没有具体缺陷。并行默认关闭；同一层的范围“互不依赖”，有依赖的排在后面；拆分的结果先合并，合并后的候选要做一次完整比较才算数，各部分从不单独验收。真实数据里 3 次拆分合并都没有冲突，合并后的候选都跑了完整比较。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>“先封存再写代码”“审查结论不直接卡门禁”是设计，不用改。“交付报告里看不到审查结论和未解决的问题”是真实的小缺陷，建议改。“<code>blocked</code> 的未知问题不影响状态”代码和文档一致；我仍然把它算作值得改的地方，因为现在控制器没有任何办法让交付状态反映“有一个问题我没能解决”，而这正是 <code>completed_with_gaps</code> 该表达的意思。</dd>
+      <dt>改法</dt>
+      <dd>
+        <ol class="plain">
+          <li><b>让它们进报告。</b>交付结果列出审查产物（编号和结论条数）和未关闭的未知问题；运行页同样显示；文档补一句“审查结论不改变任何状态”。</li>
+          <li><b><code>blocked</code> 的未知问题记成一个只在交付时生效的缺口</b>（<code>unresolved_unknowns</code>，不算失败，可关闭），状态落到已有的 <code>completed_with_gaps</code>；<code>open</code> 不影响状态。这一条只会把状态往下调，并且只在控制器自己明确标了 <code>blocked</code> 时生效。它改变了 <code>blocked</code> 的文档含义，属于设计决定，需要你定。</li>
+          <li><b>审查结论不直接卡交付，通过第 2 条进门禁。</b>在控制器指引里加一句：没修、也没驳回的结论，记成一条 <code>blocked</code> 的未知问题并引用审查产物。只有结论已经变成一条失败的检查时才拦交付。</li>
+        </ol>
+        <p class="sub" style="margin-top:8px">第 1、2 条的核心部分做了原型（3 个文件 64 行，未含文档、提示词和运行页）：材料的例子从 <code>succeeded</code> 变成被 <code>require="succeeded"</code> 拦下、状态 <code>completed_with_gaps</code>；只有审查结论、或未知问题是 <code>open</code>/<code>resolved</code>/<code>dropped</code> 时不变。相关 23 个测试模块 490 个测试，改前改后都是 489 个通过，各有 1 个与改动无关的失败，单独重跑通过。不采用材料的“封存后由审查者脚本追加检查”：审查者是作者一侧的会话，让它写的东西成为验收证据，违背“作者不接触测试”的隔离。如果以后要做无人值守的追加，应该由测试设计者按结论的文字写一个只给输入的 scenario 文件，以原版的录制为答案，走现有的各道门，并由主人用策略开关打开；那是一个新功能，不是修 bug。</p>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p4">
+  <div class="n">4</div>
+  <div class="body">
+    <div class="head"><h3>scenario 观察器的归一化把五种差异抹平</h3>
+      <span class="pill warn">要改 · 四处小改动，另一处可选</span><span class="tag">材料定级 P1</span><span class="tag">本页定级 中低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd><code>scenario_runner.py</code> 记返回值只用 <code>repr()</code>，丢掉时区后缀，把任何 <code> at 0x…</code> 当成内存地址，非 UTF-8 字节统一解码成替换符，警告只留前 50 条。五种明显坏掉的输出全部判 <code>passed</code>。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li>五种情形在最新 main 上全部复现，位置和材料写的一致：第 166 行（repr）、第 40–41 和 71–84 行（时刻）、第 39 和 61 行（地址）、第 117 行（解码）、第 37 和 173 行（警告）。</li>
+          <li>“返回值记 repr”“地址、路径、运行期间的时刻要归一化”是设计文档写明的做法。被抹掉的这五种差异不在文档要容忍的范围里，是规则写宽了。现有测试里有一句 <code>clean("mask 0x7f00aa")</code> 必须原样保留，注释是 “a number the code prints is no address”：作者本来就不想误伤代码打印的数字，<code>register at 0x10</code> 只是没覆盖到的写法。</li>
+          <li>影响面比材料说的小。scenario 检查是测试设计者补写的“只给输入”的文件，默认只给没有有效测试的功能节点写。已有作业里：两次 tqdm 全功能运行接受的 scenario 文件是 0 个；detectron2 核心范围作业（提交 1ef5998d）有 9 个 scenario 检查、291 个用例，其中含地址、运行时刻、非法字节或 50 条以上警告的用例都是 0 个。目前没有实际漏判的记录。</li>
+          <li>测试设计者的提示词已经要求 scenario “返回简单值”“不依赖时钟、随机数和机器”，这也压低了触发的机会。</li>
+          <li>方向是验证器把“不同”判成“相同”，这是验证器最不该错的方向，而且每处只要改一两行。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>是真实缺陷，建议改。定成 P1 偏高：它不在主验收路径上，现有运行里没有碰到。</dd>
+      <dt>改法</dt>
+      <dd>
+        <ol class="plain">
+          <li><b>地址至少 6 位十六进制。</b><code>(?&lt;= at )0x[0-9a-fA-F]{6,}</code>。<code>register at 0x10</code> 这类短数字不再被抹掉。不采用材料建议的“至少 8 位并且必须包在 <code>&lt;…&gt;</code> 里”：<code>&lt;weakref at 0x…; to …&gt;</code>、<code>&lt;cell at 0x…: …&gt;</code>、<code>&lt;code object f at 0x…, file …&gt;</code> 这些标准 repr 的地址后面不是 <code>&gt;</code>，非位置无关的解释器上堆地址可以只有 7 位，收得太紧会让本来稳定的用例变成不稳定。</li>
+          <li><b>时刻归一化保留写出来的时区后缀。</b><code>&lt;now&gt;Z</code> 和 <code>&lt;now&gt;+08:00</code> 不再相同。</li>
+          <li><b>解码改用 <code>backslashreplace</code>。</b>非法字节写成 <code>\xNN</code>，3.5 之前的解释器退回 <code>replace</code>。</li>
+          <li><b>警告超过 50 条时追加一项记下多出的条数。</b>形如 <code>["&lt;more&gt;", "450"]</code>，不改记录结构。</li>
+          <li><b>记返回值的类型（可选）。</b>加一个 <code>kind</code> 字段：内置类型不记；被测项目自己定义的类型统一记 <code>&lt;project&gt;</code>，因为重写可以自由改名和挪位置；其余记带模块的类型名，和现在记异常类型的方式一致。这样 <code>str</code> 和 <code>UserString</code>、<code>float</code> 和旧版 NumPy 标量能分开。这一处要同时改 <code>scenarios.py</code> 的记录校验和失败提示行。</li>
+        </ol>
+        <p class="sub" style="margin-top:8px">五处都在副本上试过：材料脚本里的五个破坏用例从全部 <code>passed</code> 变成全部 <code>failed</code>，正常对照用例不变。<code>tests/test_scenarios.py</code> 有 3 个断言固定了旧的记录格式（1 个是不带时区的 <code>&lt;now&gt;</code>，2 个和第 5 处有关），需要跟着改；这 5 个相关测试模块的其余 75 个测试通过。记录格式变了以后，基线和候选必须由同一版 runner 录制，升级前导出的验证包需要重录。</p>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p5">
+  <div class="n">5</div>
+  <div class="body">
+    <div class="head"><h3>“能读原版源码、不许照抄、照抄了也不打回”</h3>
+      <span class="pill good">不用改 · 设计取舍</span><span class="tag">材料定级 P2</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd>作者能读到原版源码，提示词又警告不要逐行重复，默认配置 <code>max_rewrites: 0</code> 其实不打回。作者为了降低重复率，把 <code>if val is None</code> 这类边界保护合并成 <code>or</code>，引入隐蔽 bug；真照抄了又没人拦。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li>默认值确实是 <code>mode: "on"</code>、40%、60%、8 行、<code>max_rewrites: 0</code>。这是刚合入的两个改动有意定下的，<code>original_overlap.py</code> 开头写了理由：告知并测量，不拒绝保存；超限只是报告里的标记。</li>
+          <li>材料担心的那种压力，main 已经处理过。提交 <code>51b62ed</code> 的说明记录了起因：一次 tqdm 运行里，作者以为超限会被打回，自己写脚本量重复率，花了 56 分钟里的 18 分钟去改已经能用的代码。现在默认作业的作者读到的是：超限的文件随交付报告给主人，“不要自己量这个比例，不要为了降低它去改能用的代码”。</li>
+          <li>提示词同时要求行为不能丢：记录里没写明的行为“到借给你的原版文件里读，不要猜，也不要丢”。</li>
+          <li>材料举的 3–4 行保护代码不会被单独标记。函数级上限只看比较行数达到 8 行的函数，短函数只计入整份文件的比例。</li>
+          <li>材料没有给出“重复率提示导致回归”的证据。七项离线复现里，这一项只打印了默认配置和一句提示词，没有运行作者。页面开头的 tqdm 数字没有说明来自哪个提交、是否借阅源码，不能归因到这里。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>不是 bug，是刚做完的设计取舍，并且已经朝材料希望的方向调过一次。不建议改代码。</dd>
+      <dt>可以做的</dt>
+      <dd>如果想验证这个假设，用同一份契约跑一次对照：<code>original_overlap</code> 的 <code>mode</code> 分别设 <code>"on"</code> 和 <code>"off"</code>，比较交付后回放里公开测试的回归数。有差别再考虑在作者提示词里加一句“判断条件和运算顺序是行为，不是文字”，没有差别就不动。</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p6">
+  <div class="n">6</div>
+  <div class="body">
+    <div class="head"><h3>修复反馈：第二次运行的数值，和被打码的十六进制数</h3>
+      <span class="pill warn">一半要改 · 一行</span><span class="tag">材料定级 P2</span><span class="tag">本页定级 低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd>A：失败的 <code>python -c</code> 检查会在同一棵树里再跑一遍来取断言两边的值，有状态的检查第二遍的值和第一遍不同，作者拿到假数字。B：<code>assertion_feedback.py</code> 把 6 位以上的 <code>0x…</code> 都当地址打码，颜色值 <code>0xff0000</code> 和 <code>0x00ff00</code> 打码后一样。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li><b>A 是文档写明的设计。</b><code>probe_diagnosis.py</code> 开头就写着这是“再跑一次，不算证据”，在“同一棵树、同一个沙箱”里跑，第二遍的状态、退出码和输出都不保留，只取那一行给修复参考。</li>
+          <li>材料的复现绕过了前提。真实作业里只有在原版上通过的检查才会再跑（<code>verification.py</code> 第 1652–1654 行）；材料的例子 <code>assert n == 7</code> 在原版上第一遍就失败，进不了这条路径，它是直接调用 <code>diagnose()</code> 并手工构造结果得到的。</li>
+          <li>会计数的检查本来就不稳定。基线阶段每个通过的检查在原版上要重复运行，文档写明“副作用会重复”；同一批检查也共用一棵树。把诊断单独放进隔离副本，反而和检查本身的运行方式不一致。</li>
+          <li><b>B 成立。</b>第 65 行的 <code>\b0x[0-9A-Fa-f]{6,}\b</code> 没有上下文限制，颜色、校验值、位掩码都会被换成 <code>0x…</code>。验收不受影响（比较用的是原始输出），受影响的是修复效率：作者只被告知“差异在被遮住的部分”（<code>not_shown</code>），看不到具体值。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>A 不用改。B 是小缺陷，建议顺手改。</dd>
+      <dt>改法</dt>
+      <dd>B：只在 repr 写地址的位置打码，<code>(?&lt;=\bat )0x[0-9A-Fa-f]{6,}\b</code>。<code>&lt;Bar object at 0x7f3a…&gt;</code> 照旧打码，<code>color = 0xff0000</code> 原样给出。副本上 <code>tests/test_assertion_feedback.py</code> 全部通过，材料脚本里两行颜色值不再相同。</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="item" id="p7">
+  <div class="n">7</div>
+  <div class="body">
+    <div class="head"><h3>交付后回放：同一个测试被两条命令运行时只记第一次</h3>
+      <span class="pill warn">要改 · 约 20 行</span><span class="tag">材料定级 P2</span><span class="tag">本页定级 低</span></div>
+    <dl>
+      <dt>材料的说法</dt>
+      <dd><code>original_replay.py</code> 第 444 行用 <code>setdefault</code>，一个测试只保留第一条检查跑出的结果。把清单里两条检查的顺序对调，报告的公开回归数就从 0 变成 1。另外回放在交付裁定之后才跑，不影响交付结论。</dd>
+      <dt>核对到的事实</dt>
+      <dd>
+        <ul class="plain">
+          <li>顺序依赖在最新 main 上复现：同一份代码，“常规在前”报 0 个回归，“高压在前”报 1 个。</li>
+          <li>“只记第一次”在代码注释里写了（“the first a run reported”），但文档给的理由只针对同一条命令：同一文件被两条检查用同一条命令指到时只跑一次。两条命令不同（环境变量不同、参数不同）时都会跑，结果却只取先跑的那条。这种情况下漏报回归，不像是有意的。</li>
+          <li>“回放不影响交付”是设计，不是缺陷。文档写明它“是度量，不是验收标准”，结果不给任何作者或控制器，这样这批测试始终没被重写过程看到。</li>
+          <li>触发条件：被留在验收之外的同一个测试文件，被两条命令不同的检查指到。常见于同一套测试配了多组环境变量或参数的清单。已有作业里出现过一次：detectron2 的一个测试文件有 4 个测试被两条命令各跑了一遍，两条命令的结果一致，数字没有受影响。</li>
+        </ul>
+      </dd>
+      <dt>判定</dt>
+      <dd>聚合方式是小缺陷，建议改；只影响回放这个度量的数字，不影响验收和交付状态。“回放不影响交付”不用改。</dd>
+      <dt>改法</dt>
+      <dd>每条命令单独配对比较（原版这条命令的结果对交付代码这条命令的结果）。一个测试只要在任何一条原版通过的命令下不再通过，就计为回归；每个测试仍然只计一次。副本上改了约 20 行，<code>tests/test_original_replay.py</code> 全部通过，材料脚本的两种顺序都报 1 个回归。</dd>
+    </dl>
+  </div>
+</div>
+
+  </div>
+</section>
+<section id="plan">
+  <h2>修改方案</h2>
+  <p>按“确定的缺陷先做、互不依赖、每项带回归测试”排列。第一批四项都是把“不同判成相同”或“判断依赖顺序”的地方改对，不改变任何设计。材料脚本里的用例可以直接改写成各项的回归测试。</p>
+  <div class="panel">
+    <h3>第一批：确定的缺陷</h3>
+    <div class="scroll"><table class="wide">
+      <thead><tr><th>#</th><th>改什么</th><th>在哪里</th><th>原型结果</th></tr></thead>
+      <tbody>
+        <tr><td class="id">A</td><td>scenario 观察器：地址至少 6 位十六进制；时刻保留时区后缀；非法字节用 <code>backslashreplace</code>；警告超过 50 条时记下多出的条数<small>坑点 4 的前四处</small></td><td><code>scenario_runner.py</code><small>约 20 行</small></td><td>材料的五个破坏用例里对应的四个由 <code>passed</code> 变 <code>failed</code>，正常对照不变<small><code>tests/test_scenarios.py</code> 有 1 个断言固定了不带时区的 <code>&lt;now&gt;</code>，要更新</small></td></tr>
+        <tr><td class="id">B</td><td>测试筛选：把 <code>from pytest import mark [as X]</code> 绑定的名字当作 mark 的来源<small>坑点 1</small></td><td><code>recovered_tests.py</code><small>和 E 合计 +62 −22 行</small></td><td>150 个判断里判错 4 个变 0 个，没有已有测试需要改</td></tr>
+        <tr><td class="id">C</td><td>回放：每条命令单独配对比较，任何一条原版通过的命令下不再通过就计回归<small>坑点 7</small></td><td><code>original_replay.py</code><small>约 20 行</small></td><td>两种清单顺序都报 1 个回归；<code>tests/test_original_replay.py</code> 全部通过</td></tr>
+        <tr><td class="id">D</td><td>修复反馈：只在 repr 写地址的位置（<code>at 0x…</code>）打码<small>坑点 6</small></td><td><code>assertion_feedback.py</code><small>1 行</small></td><td>颜色值原样给出；<code>tests/test_assertion_feedback.py</code> 全部通过</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <h3>第二批：建议一起做</h3>
+    <div class="scroll"><table class="wide">
+      <thead><tr><th>#</th><th>改什么</th><th>在哪里</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td class="id">E</td><td>测试筛选：<code>-m</code> 表达式里出现已知由插件添加的 mark（<code>hypothesis</code>、<code>asyncio</code>）时判“不确定”；文档补一句写明两条假设<small>坑点 1</small></td><td><code>recovered_tests.py</code>、<code>docs/graph-rewrite.md</code></td><td>丢失会以“未验证”报告出来，不再静默。表里只放验证过的名字</td></tr>
+        <tr><td class="id">F</td><td>scenario：记录返回值的类型（<code>kind</code>）<small>坑点 4 的第五处</small></td><td><code>scenario_runner.py</code>、<code>scenarios.py</code><small>约 30 行</small></td><td>改记录格式，<code>tests/test_scenarios.py</code> 另有 2 个断言要更新；升级前导出的验证包需要重录</td></tr>
+        <tr><td class="id">G</td><td>交付结果和运行页列出审查产物、未关闭的未知问题；<code>blocked</code> 的未知问题记成只在交付时生效的缺口，状态落到 <code>completed_with_gaps</code>；控制器指引加一句<small>坑点 3</small></td><td><code>job_tools/acceptance.py</code>、<code>deliver.py</code>、<code>manage.py</code>，加文档、提示词、运行页<small>核心 64 行</small></td><td>“让它们进报告”可以直接做。“<code>blocked</code> 影响状态”改变了它的文档含义，需要你定</td></tr>
+        <tr><td class="id">H</td><td>功能节点“有效但没有敲除证据”显示在公开视图、冻结结果和报告页<small>坑点 2</small></td><td><code>leaf_coverage.py</code>、<code>public_view.py</code>、<code>job_tools/freeze.py</code>，加报告页<small>核心 28 行</small></td><td>不改任何判定</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <h3>第三批：可选</h3>
+    <ul class="plain">
+      <li><b>共用文件的节点默认派一个 scenario 设计会话</b>（坑点 2）。只在原因是共用文件、节点至少有一个 <code>.py</code> 文件时生效。在调查过的 12 个作业里不会多出会话。</li>
+      <li><b>基线阶段比对恢复文件“该跑的测试”和“实际报告的用例”</b>（坑点 1）。能发现任何原因造成的“写进去了但没跑”，缺的记成未验证。</li>
+      <li><b>scenario 提示词加一句</b>（ML 一节）：数组或张量不直接返回，返回形状、类型和取整后的值。</li>
+      <li><b>一次对照实验</b>（坑点 5）：同一份契约，<code>original_overlap</code> 的 <code>mode</code> 分别为 <code>"on"</code> 和 <code>"off"</code>，比较回放里的公开回归数。有差别再动提示词。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="no">
+  <h2>不建议改的</h2>
+  <div class="panel"><div class="scroll"><table class="three">
+    <thead><tr><th>坑点</th><th>材料的建议或隐含的要求</th><th>为什么不改</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>外部库或未知装饰器一律判“不确定”</td><td>推翻一条有测试固定的假设。“不确定”让整条检查不拆分；在 detectron2 上多出 21 个不确定的测试，没有一个真有风险，也堵不住插件钩子这条真正的途径</td></tr>
+      <tr><td>1</td><td><code>deselected</code> 计入未验证缺口</td><td>读对了的时候，原命令确实没跑这个测试，不该算缺口。该修的是读错的地方</td></tr>
+      <tr><td>1</td><td>冻结时再跑一次 <code>pytest --collect-only</code></td><td>暂不做。没有一条被留出的检查带 <code>-k</code>/<code>-m</code>，不值得为此加一个阶段</td></tr>
+      <tr><td>2</td><td><code>no_exclusive_python_source</code> 不再算有效</td><td>实测两个节点都变成缺测试，补强测试和新设计的测试都救不回来，<code>strict</code> 模式下作业卡在冻结</td></tr>
+      <tr><td>2</td><td>按符号敲除</td><td>计划里没有函数级归属数据；在真实的 <code>tqdm/std.py</code> 上，材料例子里的弱测试反而会被认证为有效</td></tr>
+      <tr><td>3</td><td>改变“先封存再写代码”的顺序</td><td>这是“作者看不到测试”的前提。封存后加检查已有主人授权这条路，实测走得通</td></tr>
+      <tr><td>3</td><td>未解决的审查结论直接卡交付</td><td>结论是没验证过的模型文字，没有状态可关。唯一一次真实审查的 7 条里有 6 条被判定不是缺陷</td></tr>
+      <tr><td>3</td><td>封存后把审查者的脚本验证后追加成检查</td><td>审查者是作者一侧的会话，它写的东西不能成为验收证据</td></tr>
+      <tr><td>4</td><td>地址必须至少 8 位并且包在 <code>&lt;…&gt;</code> 里</td><td>会漏掉真实的地址，让稳定的用例变成不稳定。改成至少 6 位就够</td></tr>
+      <tr><td>5</td><td>调整默认的重复率策略或提示词</td><td>默认值是有意的，提示词已经写了“不要为了降低比例去改能用的代码”。没有证据说明它造成了回归</td></tr>
+      <tr><td>6</td><td>诊断的第二次运行放进隔离副本</td><td>文档写明这次运行不算证据；只有原版通过的检查才会再跑；隔离反而和检查本身的运行方式不一致</td></tr>
+      <tr><td>7</td><td>让回放结果影响交付</td><td>回放是度量，不是验收标准。它不给任何作者或控制器，这批测试才始终没被重写过程看到</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section id="ml">
+  <h2>材料里另外两部分：开头的实测数字，和 ML 仓库一节</h2>
+  <div class="panel">
+    <h3>开头的 90.6% 和 97.4%</h3>
+    <p>材料开头给了一组 tqdm 数字：保留单测 75/75，767 个封存公开场景里初始重写 695 个一致（90.6%），复核修复后 747 个（97.4%）。这组数字我没有复现，材料也没有随页面给出场景集、所用提交、模型和是否借阅源码。七项离线复现都不调用模型，它们证明的是“机制存在”，不是“这些机制造成了 72 个场景的差距”。读这组数字时请把它当作背景，不要当作七个坑点各自的影响量。</p>
+    <p>材料举的三个典型偏差（把存入的 0 当成空值、查找 NaN 时把迭代器耗尽、<code>update(-1)</code> 多出警告）都是作者写错了、而冻结的检查没有覆盖到的情形。对应的是“检查覆盖多少行为”这个老问题，也就是坑点 1、2、3 讨论的范围，和坑点 4–7 无关。</p>
+  </div>
+  <div class="panel">
+    <h3>ML 仓库一节</h3>
+    <p>材料认为按 <code>repr</code> 文本比较在 ML 仓库里两头出错：超过 1000 个元素的张量 repr 会省略中间，漏掉真 bug；合法的浮点尾数差会被误杀。建议改成按 shape、dtype、逐元素容差比较，并给公开的 <code>nn.Module</code> 加 <code>state_dict</code> 键名检查和一次 <code>backward()</code>。</p>
+    <ul class="plain">
+      <li>省略号截断是事实（PyTorch 和 NumPy 的默认阈值都是 1000 个元素）。但在已有的 detectron2 核心范围作业里没有发生：291 个 scenario 用例中只有 2 个的返回值是张量 repr，0 个带省略号；24 个含多位小数。</li>
+      <li>测试设计者的提示词已经要求“返回简单值（数字、字符串、它们的列表或字典）”“固定随机种子，不依赖时钟和机器”。所以设计者实际返回的是形状、求和这类摘要，不是整个张量。</li>
+      <li>浮点尾数差被判失败是偏严的方向：会多花修复调用，不会放过错误。要不要放宽是产品取舍，不是缺陷。</li>
+      <li><code>state_dict</code> 键名和 <code>backward()</code> 是新功能建议。它们可以由 scenario 文件自己表达（返回 <code>sorted(model.state_dict())</code>、返回梯度的形状），不需要验证器内置。</li>
+    </ul>
+    <p>这一节不需要改验证器。成本最低的做法是在测试设计者的 scenario 提示词里加一句：数组或张量不要直接返回，返回它的形状、类型和取整后的值（或摘要），因为长数组的 repr 会省略中间。这是一句提示词，可以和坑点 4 的改动一起做。</p>
+  </div>
+</section>
+
+<section id="method">
+  <h2>方法和局限</h2>
+  <ul class="plain">
+    <li><b>代码。</b>新克隆的最新 <code>main</code> @ 3381471，只读。和 1ef5998d 相比改了 5 个文件：两份 README、两个技能文件、一个测试。</li>
+    <li><b>材料。</b>页面全文和内嵌的复现脚本。脚本先读过再运行：它只用仓库自带的测试夹具，在临时目录里工作，不联网，不调用模型。</li>
+    <li><b>每一条怎么判。</b>读被引用的代码和它的调用路径；查设计文档、已有测试和提交历史，判断这个行为是不是有意的；写探针复现并扩展，包括真实的 pytest 和 Hypothesis、真实的基线捕获流程、脚本化的整作业；在已完成作业的记录里统计触发次数，只读；要改的在仓库副本上做原型，跑相关测试模块。</li>
+    <li><b>分工。</b>坑点 1、2、3 的深挖由三个并行的子代理完成。我抽查了它们引用的文档段落、测试、代码行和探针输出，都对得上。坑点 4 到 7 和各项原型的验证是我自己做的。</li>
+    <li><b>没有做的。</b>没有调用模型跑新的重写作业。材料开头的 767 个场景的数字没有复现。原型不包含文档、提示词和页面渲染的配套修改。测试只跑了相关模块，没有跑全量。</li>
+    <li><b>触发次数的范围。</b>已完成的作业只有 tqdm 和 detectron2 两个项目（12 到 24 个作业，视记录是否齐全）。“0 次”说明这两个项目和现在的用法没有碰到，不说明别的项目不会碰到。</li>
+    <li><b>测试噪声。</b>这台机器是共享的，有几个整作业测试在并行运行时等待超时，单独重跑通过；改前改后都如此。</li>
+  </ul>
+</section>
+
+<footer>
+  <p>材料是别人分享的分析页面，这里按标题引用，没有放链接。</p>
+  <p>nanolize 是私有仓库，这一页只引用文件名、行号、提交号和个别很短的代码片段。</p>
+</footer>
+
+
+</div>
+</body>
+</html>
